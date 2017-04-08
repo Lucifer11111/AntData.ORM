@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Data;
+using AntData.ORM.DbEngine.Connection;
 using AntData.ORM.DbEngine.HA;
 using AntData.ORM.Properties;
 
@@ -12,7 +13,7 @@ namespace AntData.ORM.DbEngine.DB
         private static readonly DatabaseBridge instance = new DatabaseBridge();
 
         public static DatabaseBridge Instance { get { return instance; } }
-
+#if !NETSTANDARD
         /// <summary>
         /// 根据Statement，返回DataSet结果集
         /// </summary>
@@ -25,6 +26,20 @@ namespace AntData.ORM.DbEngine.DB
               
                 var databases = DatabaseFactory.GetDatabasesByStatement(statement);
                 return HAFactory.GetInstance(statement.DatabaseSet).ExecuteWithHa(db => db.ExecuteDataSet(statement), databases);
+            }
+            finally
+            {
+            }
+        }
+#endif
+
+        public DataConnectionTransaction BeginTransaction(Statement statement)
+        {
+            try
+            {
+
+                var databases = DatabaseFactory.GetDatabasesByStatement(statement);
+                return HAFactory.GetInstance(statement.DatabaseSet).ExecuteWithHa(db => db.BeginTransaction(statement), databases);
             }
             finally
             {
@@ -57,7 +72,6 @@ namespace AntData.ORM.DbEngine.DB
         {
             try
             {
-           
                 var databases = DatabaseFactory.GetDatabasesByStatement(statement);
                 return HAFactory.GetInstance(statement.DatabaseSet).ExecuteWithHa(db => db.ExecuteReader(statement), databases);
             }

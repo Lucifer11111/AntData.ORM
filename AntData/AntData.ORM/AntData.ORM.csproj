@@ -17,7 +17,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;FW4;OVERRIDETOSTRING1</DefineConstants>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -82,7 +82,14 @@
     <Compile Include="DataProvider\SqlServer\SqlServerSqlOptimizer.cs" />
     <Compile Include="DataProvider\SqlServer\SqlServerTools.cs" />
     <Compile Include="DataProvider\SqlServer\SqlServerVersion.cs" />
+    <Compile Include="Data\OracleDbContext.cs" />
+    <Compile Include="Data\SqlServerlDbContext.cs" />
+    <Compile Include="Data\MysqlDbContext.cs" />
     <Compile Include="Data\DbContext.cs" />
+    <Compile Include="DbEngine\Configuration\ConnectionStringSettings.cs" />
+    <Compile Include="DbEngine\Configuration\DataProviderSettings.cs" />
+    <Compile Include="DbEngine\Configuration\DBSettings.cs" />
+    <Compile Include="DbEngine\Connection\DataConnectionTransaction.cs" />
     <Compile Include="DbEngine\Dao\BaseDao.cs" />
     <Compile Include="DbEngine\Dao\BaseDaoFactory.cs" />
     <Compile Include="DbEngine\Dao\Common\DALExtStatementConstant.cs" />
@@ -90,10 +97,20 @@
     <Compile Include="DbEngine\Dao\Common\Util\ConnectionLocatorManager.cs" />
     <Compile Include="DbEngine\Dao\Common\Util\ExceptionUtil.cs" />
     <Compile Include="DbEngine\Dao\Common\Util\ExecutorManager.cs" />
+    <Compile Include="DbEngine\Dao\Common\Util\HintsUtil.cs" />
     <Compile Include="DbEngine\Dao\Common\Util\RWSplittingManager.cs" />
+    <Compile Include="DbEngine\Dao\Common\Util\ShardingUtil.cs" />
+    <Compile Include="DbEngine\Dao\Common\Util\TypeUtils.cs" />
     <Compile Include="DbEngine\Dao\DalBridge.cs" />
     <Compile Include="DbEngine\Dao\DalException.cs" />
+    <Compile Include="DbEngine\Enums\ShardingType.cs" />
     <Compile Include="DbEngine\HA\OracleHA.cs" />
+    <Compile Include="DbEngine\Sharding\ExecuteParallelHelper.cs" />
+    <Compile Include="DbEngine\Sharding\IShardingStrategy.cs" />
+    <Compile Include="DbEngine\Sharding\ModShardingStrategy.cs" />
+    <Compile Include="DbEngine\Sharding\SequenceShardingStrategy.cs" />
+    <Compile Include="DbEngine\Sharding\ShardingExecutor.cs" />
+    <Compile Include="DbEngine\Sharding\ShardingStrategyFactory.cs" />
     <Compile Include="Expressions\Dynamic.cs" />
     <Compile Include="Mapping\SQL.cs" />
     <Compile Include="DbEngine\Dao\sql\SqlBuilder.cs" />
@@ -300,6 +317,7 @@
     <Compile Include="Metadata\MetadataReader.cs" />
     <Compile Include="Metadata\MetaMemberInfo.cs" />
     <Compile Include="Metadata\MetaTypeInfo.cs" />
+    <Compile Include="Metadata\SystemComponentModelDataAnnotationsSchemaAttributeReader.cs" />
     <Compile Include="Metadata\SystemDataLinqAttributeReader.cs" />
     <Compile Include="Metadata\SystemDataSqlServerAttributeReader.cs" />
     <Compile Include="Metadata\XmlAttributeReader.cs" />
@@ -348,6 +366,7 @@
     <Compile Include="SqlProvider\ConvertType.cs" />
     <Compile Include="SqlProvider\ISqlBuilder.cs" />
     <Compile Include="SqlProvider\ISqlOptimizer.cs" />
+    <Compile Include="SqlProvider\JoinOptimizer.cs" />
     <Compile Include="SqlProvider\SqlProviderFlags.cs" />
     <Compile Include="SqlProvider\ValueToSqlConverter.cs" />
     <Compile Include="SqlQuery\DefaulNullable.cs" />

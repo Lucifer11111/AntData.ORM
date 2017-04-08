@@ -1,6 +1,6 @@
 # AntData.ORM
 
-#NUGET
+# NUGET FOR .NET
 
 SqlServer：Install-Package AntData.ORM
 
@@ -8,6 +8,10 @@ Mysql：Install-Package AntData.ORM.Mysql
 
 Oracle: Install-Package AntData.ORM.Oracle
 
+
+# NUGET FOR Dotnetcore
+
+SqlServer : Install-Package AntData.Core
 
 QQ Group ：609142508
 
@@ -22,16 +26,29 @@ AntData.ORM For Oracle Demo：
 
 http://note.youdao.com/share/?id=998f6da78d9d7dfcc5293ca41a6d7c3a&type=note#/
 
+Dotnetcore Demo
+
+http://note.youdao.com/noteshare?id=5e85736b7f5de49e4f4fecda4e3c1e8b&sub=8A0F25C519F4413193B5D6F20DC22ED1
 
 # Instance  DbContext
 
 ```csharp
 
-private static DbContext<Entitys> DB  = new DbContext<Entitys>("testorm", new MySqlDataProvider());
+private static DbContext<Entitys> DB
+ {
+        get
+        {
+            var db = new MysqlDbContext<Entitys>("testorm");
+			//Trance Sql Log
+            db.IsEnableLogTrace = true;
+            db.OnLogTrace = OnCustomerTraceConnection;
+			//如果是sqlserver的话 可以设置下面
+			//db.IsNoLock = true;
+            return db;
+        }
+  }
 
-//Trance Sql Log
-DB.IsEnableLogTrace = true;
-DB.OnLogTrace = OnCustomerTraceConnection;
+
 private static void OnCustomerTraceConnection(CustomerTraceInfo customerTraceInfo)
 {
 	try
@@ -328,3 +345,10 @@ DB.UseTransaction(con =>
 });
 
 ```
+
+# 6.Read-write separation DEMO
+
+http://note.youdao.com/noteshare?id=6249b5fc2d17569bef12a24d54fc1b30&sub=2A83E464B28D4F41B8A93C87179AE20D
+
+# 6.Sharding By DB And Sharding By Table
+Please see unit test

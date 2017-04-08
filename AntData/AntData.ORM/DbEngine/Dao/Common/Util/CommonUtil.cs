@@ -1,5 +1,7 @@
 ﻿using System;
+#if !NETSTANDARD
 using System.Configuration;
+#endif
 using System.Security.Cryptography;
 using System.Text;
 
@@ -17,6 +19,7 @@ namespace AntData.ORM.Common.Util
         {
             text = text.Trim();
 
+#if !NETSTANDARD
             //1微妙
             using (HashAlgorithm hash = new MD5CryptoServiceProvider())
             {
@@ -29,10 +32,24 @@ namespace AntData.ORM.Common.Util
                 //0.3微秒
                 return Convert.ToBase64String(md5Data);
             }
+#else
+            //1微妙
+            using (HashAlgorithm hash = new HMACMD5())
+            {
+                //0.8微秒
+                Byte[] temp = Encoding.UTF8.GetBytes(text);
+
+                //4微秒
+                Byte[] md5Data = hash.ComputeHash(temp);
+
+                //0.3微秒
+                return Convert.ToBase64String(md5Data);
+            }
+#endif
         }
-
+#if !NETSTANDARD
         static readonly String AppIdComment = "/*" + ConfigurationManager.AppSettings["AppID"] + "*/";
-
+#endif
         /// <summary>
         /// 给SQL打上APPID的Tag
         /// </summary>
@@ -41,7 +58,9 @@ namespace AntData.ORM.Common.Util
         public static String GetTaggedAppIDSql(String sql)
         {
             StringBuilder sb = new StringBuilder();
+#if !NETSTANDARD
             sb.AppendLine(AppIdComment);
+#endif
             sb.Append(sql);
             return sb.ToString();
         }

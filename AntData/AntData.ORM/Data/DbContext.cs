@@ -5,16 +5,17 @@
 // <author>nainaigu</author>
 // <summary></summary>
 //-----------------------------------------------------------------------
-
+#if !NETSTANDARD
 using System.Transactions;
+#endif
 using AntData.ORM.DataProvider;
-using AntData.ORM.DataProvider.MySql;
 
 namespace AntData.ORM.Data
 {
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Reflection;
     using System.Text;
     using System.Threading.Tasks;
 
@@ -22,9 +23,9 @@ namespace AntData.ORM.Data
     /// <summary>
     /// 
     /// </summary>
-    public class DbContext<T> : AntData.ORM.Data.DataConnection, IDataContext where T : class
+    public abstract class DbContext<T> : AntData.ORM.Data.DataConnection, IDataContext where T : class
     {
-        //private static readonly IDataProvider provider = new MySqlDataProvider();
+        protected abstract IDataProvider provider { get; }
         //private static readonly IDataProvider provider = new SqlServerDataProvider(System.String.Empty, LinqToDB.DataProvider.SqlServer.SqlServerVersion.v2008);
         private readonly Lazy<T> _lazy = null;
         public T Tables
@@ -35,9 +36,10 @@ namespace AntData.ORM.Data
             }
         }
 
-        public DbContext(string dbMappingName,IDataProvider provider)
-            : base(provider, dbMappingName)
+        public DbContext(string dbMappingName):base(dbMappingName)
+
         {
+            base.DataProvider = provider;
 #if DEBUG
             //AntData.ORM.Common.Configuration.Linq.GenerateExpressionTest = true;
             AntData.ORM.Common.Configuration.Linq.AllowMultipleQuery = true;
@@ -63,6 +65,8 @@ namespace AntData.ORM.Data
         }
 
 
+#if !NETSTANDARD
+
         #region New Transaction
 
         //Required=》该范围需要一个事务。 如果已经存在事务，则使用该事务。否则，在进入范围之前创建新的事务。 这是默认值。
@@ -87,16 +91,8 @@ namespace AntData.ORM.Data
         {
             using (var scope = new System.Transactions.TransactionScope())
             {
-                try
-                {
-                    this.IsInTransaction = true;
-                    func(this);
-                    scope.Complete();
-                }
-                finally
-                {
-                    this.IsInTransaction = false;
-                }
+                func(this);
+                scope.Complete();
             }
         }
         /// <summary>
@@ -108,16 +104,8 @@ namespace AntData.ORM.Data
         {
             using (var scope = new System.Transactions.TransactionScope(scopeOption))
             {
-                try
-                {
-                    this.IsInTransaction = true;
-                    func(this);
-                    scope.Complete();
-                }
-                finally
-                {
-                    this.IsInTransaction = false;
-                }
+                func(this);
+                scope.Complete();
             }
         }
 
@@ -131,16 +119,8 @@ namespace AntData.ORM.Data
         {
             using (var scope = new System.Transactions.TransactionScope(scopeOption, options))
             {
-                try
-                {
-                    this.IsInTransaction = true;
-                    func(this);
-                    scope.Complete();
-                }
-                finally
-                {
-                    this.IsInTransaction = false;
-                }
+                func(this);
+                scope.Complete();
             }
         }
 
@@ -152,17 +132,9 @@ namespace AntData.ORM.Data
         {
             using (var scope = new System.Transactions.TransactionScope())
             {
-                try
+                if (func(this))
                 {
-                    this.IsInTransaction = true;
-                    if (func(this))
-                    {
-                        scope.Complete();
-                    }
-                }
-                finally
-                {
-                    this.IsInTransaction = false;
+                    scope.Complete();
                 }
             }
         }
@@ -176,17 +148,9 @@ namespace AntData.ORM.Data
         {
             using (var scope = new System.Transactions.TransactionScope(scopeOption))
             {
-                try
+                if (func(this))
                 {
-                    this.IsInTransaction = true;
-                    if (func(this))
-                    {
-                        scope.Complete();
-                    }
-                }
-                finally
-                {
-                    this.IsInTransaction = false;
+                    scope.Complete();
                 }
             }
         }
@@ -201,20 +165,54 @@ namespace AntData.ORM.Data
         {
             using (var scope = new System.Transactions.TransactionScope(scopeOption, options))
             {
-                try
+                if (func(this))
                 {
-                    this.IsInTransaction = true;
-                    if (func(this))
-                    {
-                        scope.Complete();
-                    }
-                }
-                finally
-                {
-                    this.IsInTransaction = false;
+                    scope.Complete();
                 }
             }
         }
         #endregion
+#else
+         public void UseTransaction(System.Action<DbContext<T>> func)
+        {
+            using (var scope = base.ExecuteTransaction())
+            {
+                func(this);
+                scope.Commit();
+            }
+        }
+        public void UseTransaction(System.Action<DbContext<T>> func, System.Data.IsolationLevel isolationLevel)
+        {
+            using (var scope = base.ExecuteTransaction(isolationLevel))
+            {
+                func(this);
+                scope.Commit();
+            }
+        }
+
+        public void UseTransaction(System.Func<DbContext<T>, bool> func)
+        {
+            using (var scope = base.ExecuteTransaction())
+            {
+                if (func(this))
+                {
+                    scope.Commit();
+                }
+            }
+        }
+
+        public void UseTransaction(System.Func<DbContext<T>, bool> func, System.Data.IsolationLevel isolationLevel)
+        {
+            using (var scope = base.ExecuteTransaction(isolationLevel))
+            {
+                if (func(this))
+                {
+                    scope.Commit();
+                }
+            }
+        }
+#endif
+
+
     }
 }

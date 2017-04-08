@@ -1,4 +1,6 @@
-﻿using System;
+﻿ 
+
+using System;
 using System.Configuration;
 
 namespace AntData.ORM.DbEngine.Configuration
@@ -9,7 +11,7 @@ namespace AntData.ORM.DbEngine.Configuration
     [ConfigurationCollection(typeof(DatabaseElement))]
     public sealed class DatabaseElementCollection : ConfigurationElementCollection
     {
-        #region static
+#region static
 
         /// <summary>
         /// 属性集合
@@ -24,9 +26,9 @@ namespace AntData.ORM.DbEngine.Configuration
             s_Properties = new ConfigurationPropertyCollection();
         }
 
-        #endregion
+#endregion
 
-        #region collection operator
+#region collection operator
 
         public new DatabaseElement this[String name]
         {
@@ -47,10 +49,15 @@ namespace AntData.ORM.DbEngine.Configuration
             }
         }
 
-        protected override ConfigurationPropertyCollection Properties
+#if !NETSTANDARD
+         protected override ConfigurationPropertyCollection Properties
         {
             get { return s_Properties; }
         }
+#else
+        protected internal override ConfigurationPropertyCollection Properties { get { return s_Properties; } }
+
+#endif
 
         public void Add(DatabaseElement element)
         {
@@ -107,6 +114,6 @@ namespace AntData.ORM.DbEngine.Configuration
             base.BaseRemoveAt(index);
         }
 
-        #endregion
+#endregion
     }
 }

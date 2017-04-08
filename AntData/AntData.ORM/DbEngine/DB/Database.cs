@@ -1,13 +1,18 @@
 using System;
+#if !NETSTANDARD
 using System.Configuration;
+#endif
 using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
+#if !NETSTANDARD
 using System.Transactions;
+#endif
 using AntData.ORM.Common.Util;
+using AntData.ORM.Dao;
 using AntData.ORM.Dao.Common;
 using AntData.ORM.DbEngine.Connection;
 using AntData.ORM.DbEngine.Providers;
@@ -26,7 +31,6 @@ namespace AntData.ORM.DbEngine.DB
         /// </summary>
         private String m_ConnectionString;
 
-        private readonly ReaderWriterLockSlim connectionStringLock = new ReaderWriterLockSlim();
 
         /// <summary>
         /// 数据库提供者对象
@@ -43,7 +47,7 @@ namespace AntData.ORM.DbEngine.DB
             get
             {
                 // 原来是 重新读取All In One中的连接串
-               // connectionStringLock.EnterReadLock();
+                // connectionStringLock.EnterReadLock();
                 //String result = m_ConnectionString;
                 //connectionStringLock.ExitReadLock();
                 return m_ConnectionString;
@@ -107,10 +111,11 @@ namespace AntData.ORM.DbEngine.DB
             AllInOneKey = connectionStringName;
             m_DatabaseProvider = databaseProvider;
             LoadActualConnectionString();
+            _closeTransaction = false;
         }
 
         /// <summary>
-        /// 重新读取All In One中的连接串
+        /// 重新读取All In One中的连接串 这里为了方便直接用了配置文件里面的
         /// </summary>
         private void LoadActualConnectionString()
         {
@@ -135,7 +140,13 @@ namespace AntData.ORM.DbEngine.DB
         {
             var connection = TransactionConnectionManager.GetConnection(this);
             if (connection != null)
+            {
+#if DEBUG
+                Debug.WriteLine(connection.ConnectionString);
+#endif
                 return new ConnectionWrapper(connection, false);
+            }
+
 
             try
             {
@@ -153,6 +164,78 @@ namespace AntData.ORM.DbEngine.DB
             return new ConnectionWrapper(connection, disposeInnerConnection);
         }
 
+        #region Transactions
+        bool _closeTransaction;
+        public IDbTransaction Transactions { get; internal set; }
+        public DataConnectionTransaction BeginTransaction(Statement statement)
+        {
+            // If transaction is open, we dispose it, it will rollback all changes.
+            //
+            if (Transactions != null)
+                Transactions.Dispose();
+
+            // Create new transaction object.
+            DbConnection connection = null;
+            try
+            {
+                connection = CreateConnection();
+                connection.Open();
+            }
+            catch
+            {
+                if (connection != null)
+                    connection.Close();
+                throw;
+            }
+
+            if (statement.Hints != null && statement.Hints.Contains(DALExtStatementConstant.ISOLATION_LEVEL))
+            {
+                var level = (System.Data.IsolationLevel)statement.Hints[DALExtStatementConstant.ISOLATION_LEVEL];
+                Transactions = connection.BeginTransaction(level);
+            }
+            else
+            {
+                Transactions = connection.BeginTransaction();
+            }
+
+
+            _closeTransaction = true;
+
+            return new DataConnectionTransaction(new ConnectionWrapper(connection, this));
+        }
+
+        public void CommitTransaction()
+        {
+            if (Transactions != null)
+            {
+                Transactions.Commit();
+
+                if (_closeTransaction)
+                {
+                    Transactions.Dispose();
+                    Transactions = null;
+
+                }
+            }
+        }
+
+        public void RollbackTransaction()
+        {
+            if (Transactions != null)
+            {
+                Transactions.Rollback();
+
+                if (_closeTransaction)
+                {
+                    Transactions.Dispose();
+                    Transactions = null;
+
+                }
+            }
+        }
+
+        #endregion
+
         /// <summary>
         /// 创建数据库链接
         /// </summary>
@@ -160,8 +243,10 @@ namespace AntData.ORM.DbEngine.DB
         public DbConnection CreateConnection()
         {
             if (String.IsNullOrEmpty(ConnectionString))
-                throw new ConfigurationErrorsException(String.Format("ConnectionString:{0} can't be found!", AllInOneKey));
-
+                throw new DalException(String.Format("ConnectionString:{0} can't be found!", AllInOneKey));
+#if DEBUG
+            Debug.WriteLine(ConnectionString);
+#endif
             var connection = m_DatabaseProvider.CreateConnection();
             connection.ConnectionString = ConnectionString;
             return connection;
@@ -176,7 +261,7 @@ namespace AntData.ORM.DbEngine.DB
         {
             DbCommand command = m_DatabaseProvider.CreateCommand();
             command.CommandText = statement.StatementText;
-            command.CommandType = statement.StatementType ==StatementType.Sql ? CommandType.Text : CommandType.StoredProcedure;
+            command.CommandType = statement.StatementType == StatementType.Sql ? CommandType.Text : CommandType.StoredProcedure;
             command.CommandTimeout = statement.Timeout;
             String providerName = m_DatabaseProvider.GetType().Name;
 
@@ -207,7 +292,6 @@ namespace AntData.ORM.DbEngine.DB
                         parameter.Value = p.Value ?? DBNull.Value;
                         parameter.Direction = p.Direction;
                         parameter.IsNullable = p.IsNullable;
-                        
                         command.Parameters.Add(parameter);
                     }
                     else
@@ -248,6 +332,7 @@ namespace AntData.ORM.DbEngine.DB
                     p.Value = command.Parameters[m_DatabaseProvider.CreateParameterName(p.Name)].Value;
             }
         }
+#if !NETSTANDARD
 
         /// <summary>
         /// 加载程序集
@@ -296,8 +381,11 @@ namespace AntData.ORM.DbEngine.DB
                 adapter.Fill(dataSet);
             }
         }
-
+#endif
         #endregion
+
+#if !NETSTANDARD
+
 
         /// <summary>
         /// 执行返回数据集指令
@@ -312,33 +400,37 @@ namespace AntData.ORM.DbEngine.DB
             {
                 DataSet dataSet = new DataSet { Locale = CultureInfo.InvariantCulture };
                 statement.PreProcess(AllInOneKey, ActualDatabaseName, DatabaseRWType, m_DatabaseProvider, ConnectionString);
-           
-
-                using (DbCommand command = PrepareCommand(statement))
+                var trans_wrapper = GetConnectionInTransaction(statement);
+                using (IDbCommand command = PrepareCommand(statement))
                 {
-                    using (var wrapper = GetOpenConnection(true))
+                    using (var wrapper = trans_wrapper ?? GetOpenConnection(true))
                     {
                         command.Connection = wrapper.Connection;
-                        LoadDataSet(statement, command, dataSet);
-                        UpdateStatementParamenters(statement, command);
+                        if (trans_wrapper != null)
+                        {
+                            command.Transaction = trans_wrapper.Database.Transactions;
+                        }
+                        LoadDataSet(statement, (DbCommand)command, dataSet);
+                        UpdateStatementParamenters(statement, (DbCommand)command);
                     }
                 }
 
-              
+                statement.ExecStatus = DALState.Success;
                 return dataSet;
-            }
-            catch (DbException ex)
-            {
-                throw;
             }
             catch (Exception ex)
             {
-                throw;
+                statement.ExecStatus = DALState.Fail;
+                throw ex;
             }
             finally
             {
+                watch.Stop();
+                statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
             }
         }
+#endif
+
 
         /// <summary>
         /// 执行非查询指令
@@ -353,29 +445,32 @@ namespace AntData.ORM.DbEngine.DB
             {
                 Int32 result;
                 statement.PreProcess(AllInOneKey, ActualDatabaseName, DatabaseRWType, m_DatabaseProvider, ConnectionString);
-
-                using (DbCommand command = PrepareCommand(statement))
+                var trans_wrapper = GetConnectionInTransaction(statement);
+                using (IDbCommand command = PrepareCommand(statement))
                 {
-                    using (var wrapper = GetOpenConnection(true))
+                    using (var wrapper = trans_wrapper ??  GetOpenConnection(true))
                     {
                         command.Connection = wrapper.Connection;
+                        if (trans_wrapper!=null)
+                        {
+                            command.Transaction = trans_wrapper.Database.Transactions;
+                        }
                         result = command.ExecuteNonQuery();
-                        UpdateStatementParamenters(statement, command);
+                        UpdateStatementParamenters(statement, (DbCommand)command);
                     }
                 }
-
+                statement.ExecStatus = DALState.Success;
                 return result;
-            }
-            catch (DbException ex)
-            {
-                throw;
             }
             catch (Exception ex)
             {
-                throw;
+                statement.ExecStatus = DALState.Fail;
+                throw ex;
             }
             finally
             {
+                watch.Stop();
+                statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
             }
         }
 
@@ -392,30 +487,52 @@ namespace AntData.ORM.DbEngine.DB
             {
                 IDataReader reader;
                 statement.PreProcess(AllInOneKey, ActualDatabaseName, DatabaseRWType, m_DatabaseProvider, ConnectionString);
-
-                using (DbCommand command = PrepareCommand(statement))
+                var trans_wrapper = GetConnectionInTransaction(statement);
+                using (IDbCommand command = PrepareCommand(statement))
                 {
-                    using (var wrapper = GetOpenConnection(false))
+                    using (var wrapper = trans_wrapper ?? GetOpenConnection(false))
                     {
                         command.Connection = wrapper.Connection;
+                        if (trans_wrapper != null)
+                        {
+                            command.Transaction = trans_wrapper.Database.Transactions;
+                        }
+#if !NETSTANDARD
                         reader = command.ExecuteReader(Transaction.Current != null ? CommandBehavior.Default : CommandBehavior.CloseConnection);
-                        UpdateStatementParamenters(statement, command);
+#else
+                        reader = command.ExecuteReader(trans_wrapper!=null ?CommandBehavior.Default :CommandBehavior.CloseConnection);
+#endif
+                        UpdateStatementParamenters(statement, (DbCommand)command);
                     }
                 }
-
+                statement.ExecStatus = DALState.Success;
                 return reader;
-            }
-            catch (DbException ex)
-            {
-                throw;
             }
             catch (Exception ex)
             {
-                throw;
+                statement.ExecStatus = DALState.Fail;
+                throw ex;
             }
             finally
             {
+                watch.Stop();
+                statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
             }
+        }
+
+        /// <summary>
+        /// 判断 hints里面是否已有连接
+        /// </summary>
+        /// <param name="statement"></param>
+        /// <returns></returns>
+        public ConnectionWrapper GetConnectionInTransaction(Statement statement)
+        {
+            ConnectionWrapper trans_wrapper = null;
+            if (statement.Hints != null && statement.Hints.Contains(DALExtStatementConstant.TRANSACTION_CONNECTION))
+            {
+                trans_wrapper = statement.Hints[DALExtStatementConstant.TRANSACTION_CONNECTION] as ConnectionWrapper;
+            }
+            return trans_wrapper;
         }
 
         /// <summary>
@@ -431,29 +548,32 @@ namespace AntData.ORM.DbEngine.DB
             {
                 Object result;
                 statement.PreProcess(AllInOneKey, ActualDatabaseName, DatabaseRWType, m_DatabaseProvider, ConnectionString);
-
-                using (DbCommand command = PrepareCommand(statement))
+                var trans_wrapper = GetConnectionInTransaction(statement);
+                using (IDbCommand command = PrepareCommand(statement))
                 {
-                    using (var wrapper = GetOpenConnection(true))
+                    using (var wrapper = trans_wrapper ?? GetOpenConnection(true))
                     {
                         command.Connection = wrapper.Connection;
+                        if (trans_wrapper != null)
+                        {
+                            command.Transaction = trans_wrapper.Database.Transactions;
+                        }
                         result = command.ExecuteScalar();
-                        UpdateStatementParamenters(statement, command);
+                        UpdateStatementParamenters(statement, (DbCommand)command);
                     }
                 }
-
+                statement.ExecStatus = DALState.Success;
                 return result;
-            }
-            catch (DbException ex)
-            {
-                throw;
             }
             catch (Exception ex)
             {
-                throw;
+                statement.ExecStatus = DALState.Fail;
+                throw ex;
             }
             finally
             {
+                watch.Stop();
+                statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
             }
         }
 
@@ -473,28 +593,41 @@ namespace AntData.ORM.DbEngine.DB
                 if (statement.StatementType == StatementType.Sql)
                     statement.StatementText = CommonUtil.GetTaggedAppIDSql(statement.StatementText);
                 watch.Start();
-
-                using (DbCommand command = PrepareCommand(statement))
+                var trans_wrapper = GetConnectionInTransaction(statement);
+                using (IDbCommand command = PrepareCommand(statement))
                 {
-                    using (var wrapper = GetOpenConnection(false))
+                    using (var wrapper = trans_wrapper ?? GetOpenConnection(false))
                     {
                         command.Connection = wrapper.Connection;
-                        reader = command.ExecuteReader(Transaction.Current != null ? CommandBehavior.Default : CommandBehavior.CloseConnection);
-                        UpdateStatementParamenters(statement, command);
+                        if (trans_wrapper != null)
+                        {
+                            command.Transaction = trans_wrapper.Database.Transactions;
+                        }
+#if !NETSTANDARD
+                        reader =
+                               command.ExecuteReader(Transaction.Current != null
+                                   ? CommandBehavior.Default
+                                   : CommandBehavior.CloseConnection);
+#else
+                        reader =command.ExecuteReader(trans_wrapper !=null ?CommandBehavior.Default : CommandBehavior.CloseConnection);
+#endif
+
+                        UpdateStatementParamenters(statement, (DbCommand)command);
                     }
                 }
 
-                watch.Stop();
-                statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
                 statement.ExecStatus = DALState.Success;
                 return reader;
             }
             catch
             {
                 statement.ExecStatus = DALState.Fail;
+                return null;
+            }
+            finally
+            {
                 watch.Stop();
                 statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
-                return null;
             }
         }
 
@@ -515,19 +648,21 @@ namespace AntData.ORM.DbEngine.DB
 
                 watch.Start();
                 Object result;
-
-                using (var command = PrepareCommand(statement))
+                var trans_wrapper = GetConnectionInTransaction(statement);
+                using (IDbCommand command = PrepareCommand(statement))
                 {
-                    using (var wrapper = GetOpenConnection(true))
+                    using (var wrapper = trans_wrapper ?? GetOpenConnection(true))
                     {
+                        if (trans_wrapper != null)
+                        {
+                            command.Transaction = trans_wrapper.Database.Transactions;
+                        }
                         command.Connection = wrapper.Connection;
                         result = command.ExecuteScalar();
-                        UpdateStatementParamenters(statement, command);
+                        UpdateStatementParamenters(statement, (DbCommand)command);
                     }
                 }
 
-                watch.Stop();
-                statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
                 statement.ExecStatus = DALState.Success;
                 statement.RecordCount = result == null ? 0 : 1;
                 return result;
@@ -535,9 +670,12 @@ namespace AntData.ORM.DbEngine.DB
             catch
             {
                 statement.ExecStatus = DALState.Fail;
+                return null;
+            }
+            finally
+            {
                 watch.Stop();
                 statement.Duration = TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds);
-                return null;
             }
         }
 

@@ -14,6 +14,7 @@ namespace AntData.ORM.DbEngine.Configuration
 
         private readonly ConfigurationProperty databaseProviders;
 
+        private readonly ConfigurationProperty connectionLocator;
 
         #endregion
 
@@ -27,7 +28,7 @@ namespace AntData.ORM.DbEngine.Configuration
             databaseSets = new ConfigurationProperty("databaseSets", typeof(DatabaseSetElementCollection), null, ConfigurationPropertyOptions.None);
             databaseProviders = new ConfigurationProperty("databaseProviders", typeof(DatabaseProviderElementCollection), null, ConfigurationPropertyOptions.None);
 
-          
+            connectionLocator = new ConfigurationProperty("connectionLocator", typeof(ConnectionLocatorElement), null, ConfigurationPropertyOptions.None);
         }
 
         #endregion
@@ -55,6 +56,9 @@ namespace AntData.ORM.DbEngine.Configuration
         public String Name
         {
             get { return (String)base["name"]; }
+#if NETSTANDARD
+            set { Name = value; }
+#endif
         }
 
         #endregion
@@ -68,6 +72,9 @@ namespace AntData.ORM.DbEngine.Configuration
         public DatabaseSetElementCollection DatabaseSets
         {
             get { return (DatabaseSetElementCollection)base[databaseSets]; }
+#if NETSTANDARD
+            set { DatabaseSets = value; }
+#endif
         }
 
         /// <summary>
@@ -77,9 +84,22 @@ namespace AntData.ORM.DbEngine.Configuration
         public DatabaseProviderElementCollection DatabaseProviders
         {
             get { return (DatabaseProviderElementCollection)base[databaseProviders]; }
+#if NETSTANDARD
+            set { DatabaseProviders = value; }
+#endif
         }
 
-      
+        /// <summary>
+        /// Connection String
+        /// </summary>
+        [ConfigurationProperty("connectionLocator")]
+        public ConnectionLocatorElement ConnectionLocator
+        {
+            get { return (ConnectionLocatorElement)base[connectionLocator]; }
+#if NETSTANDARD
+            set { ConnectionLocator = value; }
+#endif
+        }
 
         #endregion
     }

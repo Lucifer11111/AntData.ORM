@@ -63,6 +63,12 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
+    <Compile Include="Model\EntityRobotForMysql2.generated.cs" />
+    <Compile Include="Model\EntityRobotForMysql3.generated.cs" />
+    <Compile Include="StaticMethod.cs" />
+    <Compile Include="UnitTestForRW.cs" />
+    <Compile Include="UnitTestForSharingTable.cs" />
+    <Compile Include="UnitTestForSharingDB.cs" />
     <Compile Include="UnitTestForOracle.cs" />
     <Compile Include="UnitTestForMysql.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

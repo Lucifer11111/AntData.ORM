@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq.Expressions;
@@ -26,11 +27,11 @@ namespace AntData.ORM
 
         #region 执行sql
 
-        object SetQuery(IQueryContext queryContext);
+        object SetQuery(IQueryContext queryContext, ArrayList arrList = null);
         int ExecuteNonQuery(object query);
         object ExecuteScalar(object query);
         object ExecuteScalar(object query, bool Identity);
-        IDataReader ExecuteReader(object query);
+        IList<IDataReader> ExecuteReader(object query);
         void ReleaseQuery(object query);
 
         #endregion

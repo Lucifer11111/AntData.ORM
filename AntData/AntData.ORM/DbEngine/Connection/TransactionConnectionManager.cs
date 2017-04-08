@@ -2,10 +2,13 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Threading;
-using System.Transactions;
+
 using AntData.ORM.Dao;
 using AntData.ORM.DbEngine.DB;
 
+#if !NETSTANDARD
+using System.Transactions;
+#endif
 namespace AntData.ORM.DbEngine.Connection
 {
     /// <summary>
@@ -13,6 +16,7 @@ namespace AntData.ORM.DbEngine.Connection
     /// </summary>
     class TransactionConnectionManager
     {
+#if !NETSTANDARD
         #region private field
 
         private static readonly ConcurrentDictionary<Transaction, ConcurrentDictionary<String, DbConnection>> TransactionConnections =
@@ -22,16 +26,20 @@ namespace AntData.ORM.DbEngine.Connection
         private static String connectionString;
 
         #endregion
+#endif
 
         /// <summary>
         /// 获取数据库链接
-        /// 当在同一个事务中的时候获取到的相同数据库的链接应该是一个对象
+        /// 当在同一个事务中的时候获取到的相同数据库的链接应该是一个对象k
         /// 避免分布式事务,仅支持TransactionScope
         /// </summary>
         /// <param name="db"></param>
         /// <returns></returns>
         internal static DbConnection GetConnection(Database db)
         {
+#if !NETSTANDARD
+            
+
             var currentTransaction = Transaction.Current;
             if (currentTransaction == null) return null;
 
@@ -71,8 +79,11 @@ namespace AntData.ORM.DbEngine.Connection
 
                 return connection;
             });
+#else
+            return null;
+#endif
         }
-
+#if !NETSTANDARD
         /// <summary>
         /// 事务完成事件
         /// </summary>
@@ -91,6 +102,6 @@ namespace AntData.ORM.DbEngine.Connection
                 }
             }
         }
-
+#endif
     }
 }

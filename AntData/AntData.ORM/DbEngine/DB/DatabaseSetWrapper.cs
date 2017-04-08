@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using AntData.DbEngine.Sharding;
 using AntData.ORM.Enums;
 
 namespace AntData.ORM.DbEngine.DB
@@ -24,17 +25,37 @@ namespace AntData.ORM.DbEngine.DB
         /// </summary>
         public Boolean EnableReadWriteSpliding { get; set; }
 
-
+        /// <summary>
+        /// 从数据库分片权重
+        /// </summary>
+        private Dictionary<String, Int32> m_TotalRatios;
         /// <summary>
         /// 数据库列表
         /// </summary>
         private List<DatabaseWrapper> m_DatabaseWrappers;
 
-        
-  
+        /// <summary>
+        /// 分片列表
+        /// </summary>
+        public ISet<String> AllShards = new HashSet<String>();
 
+        /// <summary>
+        /// Sharding策略
+        /// </summary>
+        public IShardingStrategy ShardingStrategy { get; set; }
         #endregion
-
+        /// <summary>
+        /// 从数据库分片权重
+        /// </summary>
+        public Dictionary<String, Int32> TotalRatios
+        {
+            get
+            {
+                if (m_TotalRatios == null)
+                    m_TotalRatios = new Dictionary<String, Int32>();
+                return m_TotalRatios;
+            }
+        }
 
         /// <summary>
         /// 数据库列表

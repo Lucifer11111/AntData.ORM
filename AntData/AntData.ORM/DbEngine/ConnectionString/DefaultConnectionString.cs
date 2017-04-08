@@ -1,10 +1,12 @@
-﻿using System;
+﻿#if !NETSTANDARD
+ 
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Threading;
 using System.Xml;
-
+using System.Linq;
 namespace AntData.ORM.DbEngine.ConnectionString
 {
     /// <summary>
@@ -19,9 +21,11 @@ namespace AntData.ORM.DbEngine.ConnectionString
         {
             try
             {
-               
+
                 //这里原来的意思是从一个固定的地址去根据逻辑数据库名(key)去读真实的连接字符串
-                
+                //String path = DALBootstrap.GetConnectionLocatorPath();
+                //if (String.IsNullOrEmpty(path))
+                //    throw new Exception("ConnectionString file doesn't exist.");
                 //rwLock.EnterWriteLock();
                 //var collection = DALBootstrap.ConnectionStringKeys;
                 //if (collection != null && collection.Count > 0)
@@ -69,7 +73,7 @@ namespace AntData.ORM.DbEngine.ConnectionString
             if (array.Length == 0)
                 return collection;
 
-            var keys = new List<String>(array).ConvertAll(n => n.ToLower());
+            var keys = new List<String>(array).Select(r=>r.ToLower()).ToList();
             var settings = new XmlReaderSettings
             {
                 ConformanceLevel = ConformanceLevel.Fragment,
@@ -135,3 +139,4 @@ namespace AntData.ORM.DbEngine.ConnectionString
         }
     }
 }
+#endif

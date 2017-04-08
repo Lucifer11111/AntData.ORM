@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------
 
 using AntData.ORM.Data;
+using AntData.ORM.Extensions;
 using AntData.ORM.Mapping;
 
 namespace AntData.ORM.DataProvider.Oracle
@@ -29,7 +30,7 @@ namespace AntData.ORM.DataProvider.Oracle
             var id = base.Columns.FirstOrDefault(r => r.IsIdentity);
             if (id != null)
             {
-                var seq = id.MemberInfo.GetCustomAttributes(typeof(SequenceNameAttribute), true).FirstOrDefault();
+                var seq = id.MemberInfo.GetCustomAttributesEx(typeof(SequenceNameAttribute), true).FirstOrDefault();
                 var seqName = seq as SequenceNameAttribute;
                 if (seqName != null)
                 {
@@ -38,8 +39,9 @@ namespace AntData.ORM.DataProvider.Oracle
             }
         }
 
-        public override void BuildColumns(object item)
+        public override void BuildColumns(object item, string tableName, Func<ColumnDescriptor, bool> skipConvert = null)
         {
+            skipConvert = skipConvert ?? (_ => false);
             for (var i = 0; i < Columns.Length; i++)
             {
                 var column = Columns[i];
@@ -51,7 +53,7 @@ namespace AntData.ORM.DataProvider.Oracle
                 }
                 var value = column.GetValue(item);
 
-                if (!ValueConverter.TryConvert(StringBuilder, ColumnTypes[i], value))
+                if (!skipConvert(column) /*|| !ValueConverter.TryConvert(StringBuilder, ColumnTypes[i], value)*/)
                 {
                     var name = ParameterName == "?" ? ParameterName : ParameterName + ++ParameterIndex;
 
@@ -61,9 +63,11 @@ namespace AntData.ORM.DataProvider.Oracle
                     {
                         value = ((DataParameter)value).Value;
                     }
-
-                    Parameters.Add(new DataParameter(ParameterName == "?" ? ParameterName : "p" + ParameterIndex, value,
-                        column.DataType));
+                    var p = new DataParameter(ParameterName == "?" ? ParameterName : "p" + ParameterIndex, value,
+                                           column.DataType);
+                    p.TableName = tableName;
+                    p.ColumnName = column.ColumnName;
+                    Parameters.Add(p);
                 }
 
                 StringBuilder.Append(",");

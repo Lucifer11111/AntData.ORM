@@ -8,17 +8,42 @@ using System.Text;
 using System.Threading.Tasks;
 using AntData.ORM.Common;
 using AntData.ORM.DbEngine;
+using AntData.ORM.DbEngine.Connection;
+
 #pragma warning disable 618
 
 
 namespace AntData.ORM.Dao
 {
+    /// <summary>
+    /// linq 和 底层执行 的桥梁
+    /// </summary>
     public class DalBridge
     {
         protected static readonly ConcurrentDictionary<string, BaseDao> DaoCache = new ConcurrentDictionary<string, BaseDao>();
 
-        [Obsolete("IDataReader一定要在外部关闭可能造成连接泄漏 一定要关闭Idatareader")]
-        public static IDataReader CustomerExecuteQuery(string dbName, string sql, Dictionary<string, CustomerParam> paras, IDictionary hints = null, bool isWrite = false)
+        /// <summary>
+        /// 开启事物
+        /// </summary>
+        /// <param name="dbName"></param>
+        /// <param name="hints"></param>
+        /// <returns></returns>
+        public static DataConnectionTransaction CustomerBeginTransaction(string dbName, IDictionary hints = null)
+        {
+            var baseDao = DaoCache.GetOrAdd(dbName, BaseDaoFactory.CreateBaseDao(dbName));
+            return baseDao.BeginTransaction(hints);
+        }
+
+        /// <summary>
+        /// 执行 insert update delete 查询
+        /// </summary>
+        /// <param name="dbName"></param>
+        /// <param name="sql"></param>
+        /// <param name="paras"></param>
+        /// <param name="hints"></param>
+        /// <param name="isWrite"></param>
+        /// <returns></returns>
+        public static IList<IDataReader> CustomerExecuteQuery(string dbName, string sql, Dictionary<string, CustomerParam> paras, IDictionary hints = null, bool isWrite = false)
         {
             var baseDao = DaoCache.GetOrAdd(dbName, BaseDaoFactory.CreateBaseDao(dbName));
             var isNonQuery = false;
@@ -38,8 +63,19 @@ namespace AntData.ORM.Dao
             return baseDao.SelectDataReader(sql, isWrite);
         }
 
+        /// <summary>
+        /// 执行查询 返回 DataTable
+        /// </summary>
+        /// <param name="dbName"></param>
+        /// <param name="sql"></param>
+        /// <param name="paras"></param>
+        /// <param name="hints"></param>
+        /// <param name="isWrite"></param>
+        /// <returns></returns>
         public static DataTable CustomerExecuteQueryTable(string dbName, string sql, Dictionary<string, CustomerParam> paras, IDictionary hints = null, bool isWrite = false)
         {
+#if !NETSTANDARD
+
             var baseDao = DaoCache.GetOrAdd(dbName, BaseDaoFactory.CreateBaseDao(dbName));
             var isNonQuery = false;
             var dic = ConvertStatement(paras, out isNonQuery);
@@ -56,8 +92,20 @@ namespace AntData.ORM.Dao
                 return baseDao.SelectDataTable(sql, null, hints, isWrite);
             }
             return baseDao.SelectDataTable(sql, isWrite);
+#else
+            throw new NotSupportedException("not support in dotnet core");
+#endif
         }
 
+        /// <summary>
+        /// 执行查询返回单个结果 另外 sqlserver和mysql的insertWithIdentity也是走这个
+        /// </summary>
+        /// <param name="dbName"></param>
+        /// <param name="sql"></param>
+        /// <param name="paras"></param>
+        /// <param name="hints"></param>
+        /// <param name="isWrite"></param>
+        /// <returns></returns>
         public static object CustomerExecuteScalar(string dbName, string sql, Dictionary<string, CustomerParam> paras, IDictionary hints = null, bool isWrite = false)
         {
             var baseDao = DaoCache.GetOrAdd(dbName, BaseDaoFactory.CreateBaseDao(dbName));
@@ -96,6 +144,15 @@ namespace AntData.ORM.Dao
             return isNonQuery ? baseDao.ExecNonQuery(sql, isWrite) : baseDao.ExecScalar(sql, isWrite);
         }
 
+        /// <summary>
+        /// 执行 select 查询
+        /// </summary>
+        /// <param name="dbName"></param>
+        /// <param name="sql"></param>
+        /// <param name="paras"></param>
+        /// <param name="hints"></param>
+        /// <param name="isWrite"></param>
+        /// <returns></returns>
         public static int CustomerExecuteNonQuery(string dbName, string sql, Dictionary<string, CustomerParam> paras, IDictionary hints = null, bool isWrite = true)
         {
             var baseDao = DaoCache.GetOrAdd(dbName, BaseDaoFactory.CreateBaseDao(dbName));
@@ -116,6 +173,12 @@ namespace AntData.ORM.Dao
             return baseDao.ExecNonQuery(sql, isWrite);
         }
 
+        /// <summary>
+        /// 参数转换
+        /// </summary>
+        /// <param name="paras"></param>
+        /// <param name="isNonQuery"></param>
+        /// <returns></returns>
         public static StatementParameterCollection ConvertStatement(Dictionary<string, CustomerParam> paras, out bool
             isNonQuery)
         {
@@ -138,7 +201,8 @@ namespace AntData.ORM.Dao
                     {
                         dic.AddInParameter(item.Key, LinqEnumHelper.IntToEnum<DbType>(item.Value.DbType), item.Value.Value);
                     }
-
+                    dic[item.Key].TableName = item.Value.TableName;
+                    dic[item.Key].ColumnName = item.Value.ColumnName;
                 }
                 return dic;
             }

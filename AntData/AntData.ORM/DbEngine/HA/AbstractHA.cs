@@ -2,7 +2,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
+#if !NETSTANDARD
 using System.Transactions;
+#endif
 using AntData.ORM.Common.Util;
 using AntData.ORM.Dao;
 using AntData.ORM.DbEngine.DB;
@@ -31,10 +33,11 @@ namespace AntData.ORM.DbEngine.HA
 
         private Boolean SatisfyRetryFailOverCondition(DbException ex)
         {
+#if !NETSTANDARD
             //如果使用了事务，不进行重试或者Fail Over
             if (Transaction.Current != null || ex == null)
                 return false;
-
+#endif
             Int32 errorCode = 0;
             if (errorCode != 0 && RetryFailOverErrorCodes != null && RetryFailOverErrorCodes.Count > 0)
                 return RetryFailOverErrorCodes.Contains(errorCode);
@@ -71,7 +74,7 @@ namespace AntData.ORM.DbEngine.HA
 
             try
             {
-               // ExecutorManager.Executor.Daemon();
+                // ExecutorManager.Executor.Daemon();
                 //被Mark Down了，且当前Request没有放行
                 //while (haBean.EnableHA && retryTimes > 0 && !currentOperateDatabase.Available)
                 //{
@@ -91,7 +94,7 @@ namespace AntData.ORM.DbEngine.HA
             }
             catch (DbException ex)
             {
-             
+
                 var exception = ex;
                 Boolean failoverSucceed = false;
                 String databaseSet = currentOperateDatabase.DatabaseSetName;
@@ -107,7 +110,8 @@ namespace AntData.ORM.DbEngine.HA
                         if (!failoverNecessary)
                             throw;
                         //有备用的就去备用的执行试试
-                        var failoverDatabase = FallToNextDatabase(currentOperateDatabase, databases.OtherCandidates, bitArray);
+                        var failoverDatabase = FallToNextDatabase(currentOperateDatabase, databases.OtherCandidates,
+                            bitArray);
                         if (failoverDatabase == null)
                             throw;
 
@@ -129,6 +133,10 @@ namespace AntData.ORM.DbEngine.HA
 
                 if (!failoverSucceed)
                     throw;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
             }
 
             return result;

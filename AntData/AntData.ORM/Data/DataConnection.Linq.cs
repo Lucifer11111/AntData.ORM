@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -49,17 +50,17 @@ namespace AntData.ORM.Data
 
 		#region SetQuery
 
-		internal PreparedQuery GetCommand(IQueryContext query)
+		internal PreparedQuery GetCommand(IQueryContext query, ArrayList arrList = null)
 		{
 		    var needRefresh = false;
-            if (query.SelectQuery.IsInsert || query.SelectQuery.IsInsertOrUpdate)
+            if (arrList != null && arrList.Count > 0 && (bool)arrList[0])
             {
-                if (query.SelectQuery.Insert.WithIdentity && DataProvider.InsertWinthIdentityWithNoCache)
+                if (query.SelectQuery.Insert.WithIdentity)
                 {
                     needRefresh = true;
                 }
 
-                if (Configuration.Linq.IgnoreNullInsert && query.Parameters != null && query.Parameters.Count > 0)
+                if (query.Parameters != null && query.Parameters.Count > 0)
                 {
                     var ignoreList = new List<string>();
                     //如果指定了忽略NULL字段的插入
@@ -67,18 +68,26 @@ namespace AntData.ORM.Data
                     {
                         if (v.SqlParameter != null && v.SqlParameter.Value == null)
                         {
-                            ignoreList.Add(v.SqlParameter.Name);
+                            ignoreList.Add(v.SqlParameter.Name.ReplaceNumbers());//如果是关键字会在结尾里面加数字
                         }
                     }
                     if (ignoreList.Count > 0)
                     {
                         needRefresh = true;
                         query.Parameters.RemoveAll(r => r.SqlParameter != null && r.SqlParameter.Value == null);
-                        query.SelectQuery.Insert.Items.RemoveAll(r => ignoreList.Contains(((AntData.ORM.SqlQuery.SqlField)r.Column).Name));
+                        if (arrList.Count == 2 && (bool)arrList[1])
+                        {
+                            //指定了update的更新忽略null
+                            query.SelectQuery.Update.Items.RemoveAll(r => ignoreList.Contains(((SqlQuery.SqlField)r.Column).Name));
+
+                        }
+                        else
+                        {
+                            query.SelectQuery.Insert.Items.RemoveAll(r => ignoreList.Contains(((SqlQuery.SqlField)r.Column).Name));
+                        }
                     }
                 }
             }
-
             if (query.Context != null && !needRefresh )
 			{
                 return new PreparedQuery
@@ -191,6 +200,8 @@ namespace AntData.ORM.Data
 
 			DataProvider.SetParameter(p, name, dataType, parm.Value);
 		    p.DbType = DataTypeConvert.Convert(dataType);
+		    p.TableName = parm.TableName;
+		    p.ColumnName = parm.CoumnName;
 		    return p;
 		;}
 
@@ -274,7 +285,7 @@ namespace AntData.ORM.Data
 			return ExecuteScalar(pq.Commands[1], pq.Params);
 		}
 
-		IDataReader IDataContext.ExecuteReader(object query)
+		IList<IDataReader> IDataContext.ExecuteReader(object query)
 		{
 			var pq = (PreparedQuery)query;
 
@@ -358,10 +369,10 @@ namespace AntData.ORM.Data
 			return DataProvider.IsDBNullAllowed(reader, idx);
 		}
 
-		object IDataContext.SetQuery(IQueryContext queryContext)
+		object IDataContext.SetQuery(IQueryContext queryContext, ArrayList arrList = null)
 		{
             var reverseCount = 0;
-			var query = GetCommand(queryContext);
+			var query = GetCommand(queryContext, arrList);
 		    if (query.Params == null)
 		    {
 		        query.Params = new Dictionary<string, CustomerParam>();
